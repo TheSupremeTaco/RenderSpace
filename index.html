@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TRELLIS Apartment Viewer</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+
+    #ui {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      font-family: system-ui, sans-serif;
+    }
+
+    #ui button {
+      padding: 4px 10px;
+      font-size: 18px;
+      border-radius: 4px;
+      border: 1px solid #666;
+      background: #222;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    #ui button:hover {
+      background: #333;
+    }
+  </style>
+
+  <!-- Import map for three.js -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="ui">
+    <button id="zoomOut">−</button>
+    <button id="zoomIn">+</button>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
