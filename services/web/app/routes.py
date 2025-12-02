@@ -57,49 +57,46 @@ def upload():
 
 @app.route("/api/init-upload", methods=["POST"])
 def init_upload():
-    """
-    Returns a signed URL so the browser can PUT the file directly to GCS.
-    Also returns a signed GET URL we can use to load the PLY later.
-    Body: { "filename": "...", "contentType": "..." }
-    """
-    data = request.get_json(force=True)
-    filename = data.get("filename")
-    if not filename:
-        return jsonify({"error": "filename required"}), 400
+    try:
+        data = request.get_json(force=True) or {}
+        filename = data.get("filename")
+        if not filename:
+            return jsonify({"error": "filename required"}), 400
 
-    content_type = data.get("contentType") or "application/octet-stream"
+        content_type = data.get("contentType") or "application/octet-stream"
 
-    job_id = uuid4().hex
-    object_name = f"inputs/{job_id}/{filename}"
+        job_id = uuid4().hex
+        object_name = f"inputs/{job_id}/{filename}"
 
-    bucket = storage_client.bucket(GCS_INPUT_BUCKET)
-    blob = bucket.blob(object_name)
+        bucket = storage_client.bucket(GCS_INPUT_BUCKET)
+        blob = bucket.blob(object_name)
 
-    # Signed URL for PUT (upload)
-    upload_url = blob.generate_signed_url(
-        version="v4",
-        expiration=datetime.timedelta(minutes=15),
-        method="PUT",
-        content_type=content_type,
-    )
+        upload_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(minutes=15),
+            method="PUT",
+            content_type=content_type,
+        )
 
-    # Signed URL for GET (download / viewer)
-    download_url = blob.generate_signed_url(
-        version="v4",
-        expiration=datetime.timedelta(hours=1),
-        method="GET",
-    )
+        download_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(hours=1),
+            method="GET",
+        )
 
-    gcs_path = f"gs://{GCS_INPUT_BUCKET}/{object_name}"
+        gcs_path = f"gs://{GCS_INPUT_BUCKET}/{object_name}"
 
-    return jsonify(
-        {
-            "jobId": job_id,
-            "uploadUrl": upload_url,
-            "downloadUrl": download_url,
-            "gcsPath": gcs_path,
-        }
-    )
+        return jsonify(
+            {
+                "jobId": job_id,
+                "uploadUrl": upload_url,
+                "downloadUrl": download_url,
+                "gcsPath": gcs_path,
+            }
+        )
+    except Exception as e:
+        app.logger.exception("init-upload failed")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/healthz")
