@@ -150,19 +150,54 @@ form.addEventListener("submit", async (e) => {
   const file = fileInput.files[0];
   if (!file) return;
 
-  statusEl.textContent = "Uploading...";
-  const formData = new FormData();
-  formData.append("file", file);
+  try {
+    statusEl.textContent = "Initializing upload...";
 
-  const resp = await fetch("/api/upload", { method: "POST", body: formData });
-  if (!resp.ok) {
-    statusEl.textContent = "Upload failed.";
-    return;
+    // 1) Ask backend for signed URLs
+    const initResp = await fetch("/api/init-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+      }),
+    });
+
+    if (!initResp.ok) {
+      statusEl.textContent = "Failed to init upload.";
+      console.error("init-upload failed", initResp.status, await initResp.text());
+      return;
+    }
+
+    const initData = await initResp.json();
+    const { jobId, uploadUrl, downloadUrl, gcsPath } = initData;
+
+    // 2) Upload file directly to GCS via signed PUT URL
+    statusEl.textContent = `Uploading to GCS...\nJob: ${jobId}`;
+    const putResp = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: file,
+    });
+
+    if (!putResp.ok) {
+      statusEl.textContent = "Upload to GCS failed.";
+      console.error("GCS upload error", putResp.status, await putResp.text());
+      return;
+    }
+
+    statusEl.textContent =
+      `Upload complete.\nJob: ${jobId}\nGCS path: ${gcsPath}\nModel URL: ${downloadUrl}`;
+
+    // 3) For now, our "model" is just the uploaded PLY itself
+    loadPlyModel(downloadUrl);
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "Unexpected error during upload.";
   }
-
-  const data = await resp.json();
-  statusEl.textContent = `Job: ${data.jobId}\nModel URL: ${data.modelUrl}`;
-  loadPlyModel(data.modelUrl);
 });
+
 
 initViewer();

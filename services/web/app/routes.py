@@ -1,13 +1,20 @@
 import os
+import datetime
 from pathlib import Path
 from uuid import uuid4
 
 from flask import Flask, request, jsonify
+from google.cloud import storage
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
+
+# GCS bucket for large uploads (images / big PLYs)
+GCS_INPUT_BUCKET = os.environ.get("GCS_INPUT_BUCKET", "renderspace-inputs")
+
+storage_client = storage.Client()
 
 UPLOAD_DIR = os.path.join(STATIC_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -47,6 +54,52 @@ def upload():
         "jobId": safe_name,
         "modelUrl": model_url,
     })
+
+@app.route("/api/init-upload", methods=["POST"])
+def init_upload():
+    """
+    Returns a signed URL so the browser can PUT the file directly to GCS.
+    Also returns a signed GET URL we can use to load the PLY later.
+    Body: { "filename": "...", "contentType": "..." }
+    """
+    data = request.get_json(force=True)
+    filename = data.get("filename")
+    if not filename:
+        return jsonify({"error": "filename required"}), 400
+
+    content_type = data.get("contentType") or "application/octet-stream"
+
+    job_id = uuid4().hex
+    object_name = f"inputs/{job_id}/{filename}"
+
+    bucket = storage_client.bucket(GCS_INPUT_BUCKET)
+    blob = bucket.blob(object_name)
+
+    # Signed URL for PUT (upload)
+    upload_url = blob.generate_signed_url(
+        version="v4",
+        expiration=datetime.timedelta(minutes=15),
+        method="PUT",
+        content_type=content_type,
+    )
+
+    # Signed URL for GET (download / viewer)
+    download_url = blob.generate_signed_url(
+        version="v4",
+        expiration=datetime.timedelta(hours=1),
+        method="GET",
+    )
+
+    gcs_path = f"gs://{GCS_INPUT_BUCKET}/{object_name}"
+
+    return jsonify(
+        {
+            "jobId": job_id,
+            "uploadUrl": upload_url,
+            "downloadUrl": download_url,
+            "gcsPath": gcs_path,
+        }
+    )
 
 
 @app.route("/healthz")
