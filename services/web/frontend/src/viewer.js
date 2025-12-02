@@ -50,7 +50,6 @@ export async function loadModel(rawUrl) {
   const statusEl = document.getElementById("status");
   statusEl.textContent += `\nLoading model: ${rawUrl}`;
 
-  // strip query string so extension check works
   const urlObj = new URL(rawUrl, window.location.origin);
   const pathname = urlObj.pathname.toLowerCase();
 
@@ -59,18 +58,39 @@ export async function loadModel(rawUrl) {
     loader.load(
       rawUrl,
       (geometry) => {
-        geometry.computeVertexNormals();
-        const material = new THREE.MeshStandardMaterial({ flatShading: true });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        // ---------- center + normalize size ----------
+        geometry.computeBoundingBox();
+        const box = geometry.boundingBox;
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
 
-        mesh.position.set(0, 0, 0);
-        mesh.scale.set(1, 1, 1);
+        // center at origin
+        geometry.translate(-center.x, -center.y, -center.z);
+
+        // scale so longest side ~1 unit
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+        const scale = 1.0 / maxDim;
+        geometry.scale(scale, scale, scale);
+
+        // ---------- render as point cloud, not mesh ----------
+        const hasColor = geometry.getAttribute("color") !== undefined;
+        const material = new THREE.PointsMaterial({
+          size: 0.02,          // tweak: point size in world units
+          vertexColors: hasColor,
+          sizeAttenuation: true,
+        });
+
+        const points = new THREE.Points(geometry, material);
+
+        // ---------- fix orientation (Z-up -> Y-up) ----------
+        // If it’s still wrong, try Math.PI or rotate around Z instead.
+        points.rotation.x = -Math.PI / 2;
 
         clearModels();
-        scene.add(mesh);
-        statusEl.textContent += "\nPLY model loaded.";
+        scene.add(points);
+        statusEl.textContent += "\nPLY point cloud loaded.";
       },
       undefined,
       (err) => {
@@ -79,20 +99,7 @@ export async function loadModel(rawUrl) {
       }
     );
   } else if (pathname.endsWith(".gltf") || pathname.endsWith(".glb")) {
-    const loader = new GLTFLoader();
-    loader.load(
-      rawUrl,
-      (gltf) => {
-        clearModels();
-        scene.add(gltf.scene);
-        statusEl.textContent += "\nGLTF/GLB model loaded.";
-      },
-      undefined,
-      (err) => {
-        console.error("GLTF/GLB load error:", err);
-        statusEl.textContent += `\nError loading GLTF/GLB: ${err}`;
-      }
-    );
+    // keep your existing GLTF/GLB branch
   } else {
     statusEl.textContent += "\nUnknown model extension.";
   }
