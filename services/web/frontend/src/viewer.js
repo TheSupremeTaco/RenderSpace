@@ -1,12 +1,12 @@
-// src/viewer.js
-import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+/* global THREE */
+
+const statusEl = document.getElementById("status");
+const form = document.getElementById("upload-form");
+const fileInput = document.getElementById("file-input");
 
 let scene, camera, renderer, controls;
 
-export function initViewer() {
+function initViewer() {
   const container = document.getElementById("viewer-container");
   const width = container.clientWidth || window.innerWidth;
   const height = container.clientHeight || window.innerHeight * 0.7;
@@ -21,13 +21,14 @@ export function initViewer() {
   renderer.setSize(width, height);
   container.appendChild(renderer.domElement);
 
-  controls = new OrbitControls(camera, renderer.domElement);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
 
   const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
   scene.add(light);
 
-  const axes = new THREE.AxesHelper(1);
+  // Axes: X = red, Y = green (UP), Z = blue
+  const axes = new THREE.AxesHelper(1.0);
   scene.add(axes);
 
   animate();
@@ -35,62 +36,67 @@ export function initViewer() {
 
 function animate() {
   requestAnimationFrame(animate);
-  if (controls) controls.update();
+  controls.update();
   renderer.render(scene, camera);
 }
 
 function clearModels() {
-  // keep first 2 children (light + axes)
+  // Keep first children (light + axes), remove others starting from index 2
   while (scene.children.length > 2) {
     scene.remove(scene.children[2]);
   }
 }
 
-export async function loadModel(rawUrl) {
-  const statusEl = document.getElementById("status");
-  statusEl.textContent += `\nLoading model: ${rawUrl}`;
+function normalizeAndCenterGeometry(geometry) {
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
 
-  const urlObj = new URL(rawUrl, window.location.origin);
-  const pathname = urlObj.pathname.toLowerCase();
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxSize = Math.max(size.x, size.y, size.z) || 1.0;
 
-  if (pathname.endsWith(".ply")) {
-    const loader = new PLYLoader();
+  // Scale to unit size
+  const scale = 1.0 / maxSize;
+  geometry.scale(scale, scale, scale);
+
+  // Recompute bbox after scaling, then center
+  geometry.computeBoundingBox();
+  const newBox = geometry.boundingBox;
+  const center = new THREE.Vector3();
+  newBox.getCenter(center);
+  geometry.translate(-center.x, -center.y, -center.z);
+}
+
+function loadModel(url) {
+  statusEl.textContent += `\nLoading model: ${url}`;
+  const lower = url.toLowerCase();
+
+  if (lower.endsWith(".ply")) {
+    const loader = new THREE.PLYLoader();
     loader.load(
-      rawUrl,
+      url,
       (geometry) => {
-        // ---------- center + normalize size ----------
-        geometry.computeBoundingBox();
-        const box = geometry.boundingBox;
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
-        box.getSize(size);
-        box.getCenter(center);
+        geometry.computeVertexNormals();
+        normalizeAndCenterGeometry(geometry);
 
-        // center at origin
-        geometry.translate(-center.x, -center.y, -center.z);
-
-        // scale so longest side ~1 unit
-        const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        const scale = 1.0 / maxDim;
-        geometry.scale(scale, scale, scale);
-
-        // ---------- render as point cloud, not mesh ----------
-        const hasColor = geometry.getAttribute("color") !== undefined;
-        const material = new THREE.PointsMaterial({
-          size: 0.02,          // tweak: point size in world units
-          vertexColors: hasColor,
-          sizeAttenuation: true,
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          flatShading: true,
         });
 
-        const points = new THREE.Points(geometry, material);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
 
-        // ---------- fix orientation (Z-up -> Y-up) ----------
-        // If it’s still wrong, try Math.PI or rotate around Z instead.
-        points.rotation.x = -Math.PI / 2;
+        // ORIENTATION FIX:
+        // Trellis / your PLY outputs seem to have "up" != Y.
+        // Rotate -90° around X so the furniture is vertical along the green Y axis.
+        mesh.rotation.x = -Math.PI / 2;
+        // If that flips it the wrong way, use +Math.PI / 2 instead.
 
         clearModels();
-        scene.add(points);
-        statusEl.textContent += "\nPLY point cloud loaded.";
+        scene.add(mesh);
+        statusEl.textContent += "\nPLY model loaded.";
       },
       undefined,
       (err) => {
@@ -98,9 +104,44 @@ export async function loadModel(rawUrl) {
         statusEl.textContent += `\nError loading PLY: ${err}`;
       }
     );
-  } else if (pathname.endsWith(".gltf") || pathname.endsWith(".glb")) {
-    // keep your existing GLTF/GLB branch
+  } else if (lower.endsWith(".gltf") || lower.endsWith(".glb")) {
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      url,
+      (gltf) => {
+        clearModels();
+        scene.add(gltf.scene);
+        statusEl.textContent += "\nGLTF/GLB model loaded.";
+      },
+      undefined,
+      (err) => {
+        console.error("GLTF/GLB load error:", err);
+        statusEl.textContent += `\nError loading GLTF/GLB: ${err}`;
+      }
+    );
   } else {
     statusEl.textContent += "\nUnknown model extension.";
   }
 }
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  statusEl.textContent = "Uploading...";
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const resp = await fetch("/api/upload", { method: "POST", body: formData });
+  if (!resp.ok) {
+    statusEl.textContent = "Upload failed.";
+    return;
+  }
+
+  const data = await resp.json();
+  statusEl.textContent = `Job: ${data.jobId}\nModel URL: ${data.modelUrl}`;
+  loadModel(data.modelUrl);
+});
+
+initViewer();
