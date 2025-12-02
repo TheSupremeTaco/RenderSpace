@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>RenderSpace</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+      #upload-form {
+        padding: 1rem;
+      }
+      #status {
+        padding: 0 1rem;
+        white-space: pre-wrap;
+      }
+      #viewer-container {
+        width: 100vw;
+        height: 70vh;
+      }
+    </style>
+  </head>
+  <body>
+    <form id="upload-form">
+      <input
+        type="file"
+        id="file-input"
+        name="file"
+        accept=".ply"
+        required
+      />
+      <button type="submit">Upload &amp; View PLY</button>
+    </form>    
+
+    <pre id="status"></pre>
+    <div id="viewer-container"></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,3 +1,5 @@
+/* global THREE */
+
 const statusEl = document.getElementById("status");
 const form = document.getElementById("upload-form");
 const fileInput = document.getElementById("file-input");
@@ -25,6 +27,10 @@ function initViewer() {
   const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
   scene.add(light);
 
+  // optional: axes helper to see orientation
+  const axes = new THREE.AxesHelper(1);
+  scene.add(axes);
+
   animate();
 }
 
@@ -35,15 +41,14 @@ function animate() {
 }
 
 function clearModels() {
-  // keep first child (light), remove others
-  while (scene.children.length > 1) {
-    scene.remove(scene.children[1]);
+  // Keep first child (light / axes), remove others starting from index 2
+  while (scene.children.length > 2) {
+    scene.remove(scene.children[2]);
   }
 }
 
 function loadModel(url) {
   statusEl.textContent += `\nLoading model: ${url}`;
-
   const lower = url.toLowerCase();
 
   if (lower.endsWith(".ply")) {
@@ -57,12 +62,16 @@ function loadModel(url) {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
+        mesh.position.set(0, 0, 0);
+        mesh.scale.set(1, 1, 1);
+
         clearModels();
         scene.add(mesh);
         statusEl.textContent += "\nPLY model loaded.";
       },
       undefined,
       err => {
+        console.error("PLY load error:", err);
         statusEl.textContent += `\nError loading PLY: ${err}`;
       }
     );
@@ -77,6 +86,7 @@ function loadModel(url) {
       },
       undefined,
       err => {
+        console.error("GLTF/GLB load error:", err);
         statusEl.textContent += `\nError loading GLTF/GLB: ${err}`;
       }
     );

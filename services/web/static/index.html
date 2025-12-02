@@ -4,32 +4,49 @@
     <meta charset="utf-8" />
     <title>RenderSpace</title>
     <style>
-      body { margin: 0; font-family: system-ui, sans-serif; }
-      #upload-form { padding: 1rem; }
-      #status { padding: 0 1rem; white-space: pre-wrap; }
-      #viewer-container { width: 100vw; height: 70vh; }
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+      #upload-form {
+        padding: 1rem;
+      }
+      #status {
+        padding: 0 1rem;
+        white-space: pre-wrap;
+      }
+      #viewer-container {
+        width: 100vw;
+        height: 70vh;
+      }
     </style>
   </head>
   <body>
     <form id="upload-form">
-      <input type="file" id="file-input" name="file" accept="image/*" required />
-      <button type="submit">Upload & Reconstruct</button>
+      <input
+        type="file"
+        id="file-input"
+        name="file"
+        accept="image/*"
+        required
+      />
+      <button type="submit">Upload &amp; Reconstruct</button>
     </form>
 
     <pre id="status"></pre>
     <div id="viewer-container"></div>
 
-    <!-- Three.js + helpers from CDN -->
-    <script src="https://unpkg.com/three@0.165.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.165.0/examples/js/controls/OrbitControls.js"></script>
-    
-    <!-- PLYLoader for now -->
-    <script src="https://unpkg.com/three@0.165.0/examples/js/loaders/PLYLoader.js"></script>
-    
-    <!-- (optional, for when you move to GLB later) -->
-    <script src="https://unpkg.com/three@0.165.0/examples/js/loaders/GLTFLoader.js"></script>
-    
+    <!-- Local Three.js and loaders, served by Flask from /static/js/... -->
+    <script src="/js/three.min.js"></script>
+    <script src="/js/OrbitControls.js"></script>
+    <script src="/js/PLYLoader.js"></script>
+
+    <!-- Sanity check: should print "THREE present? true" -->
+    <script>
+      console.log("THREE present?", typeof THREE !== "undefined");
+    </script>
+
+    <!-- Your viewer logic (must be last) -->
     <script src="/js/viewer.js"></script>
-    
   </body>
 </html>
