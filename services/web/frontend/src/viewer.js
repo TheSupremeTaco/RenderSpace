@@ -54,21 +54,42 @@ export async function loadModel(url) {
   const statusEl = document.getElementById("status");
   if (statusEl) statusEl.textContent += `\nLoading model: ${url}`;
 
-  const lower = url.toLowerCase();
+  // 1) Ignore query string when checking extension
+  const urlNoQuery = url.split("?")[0];
+  const lower = urlNoQuery.toLowerCase();
 
   if (lower.endsWith(".ply")) {
     const loader = new PLYLoader();
     loader.load(
       url,
       (geometry) => {
+        // Ensure normals
         geometry.computeVertexNormals();
-        const material = new THREE.MeshStandardMaterial({ flatShading: true });
+
+        // 2) Center and normalize size
+        geometry.computeBoundingBox();
+        const bbox = geometry.boundingBox;
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+
+        const center = new THREE.Vector3();
+        bbox.getCenter(center);
+
+        // Move geometry so its center is at the origin
+        geometry.translate(-center.x, -center.y, -center.z);
+
+        // Uniform scale so max dimension ~ 1 unit
+        const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
+        const scale = 1.0 / maxDim;
+
+        const material = new THREE.MeshStandardMaterial({
+          flatShading: true,
+        });
         const mesh = new THREE.Mesh(geometry, material);
 
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        mesh.position.set(0, 0, 0);
-        mesh.scale.set(1, 1, 1);
+        mesh.scale.set(scale, scale, scale);
 
         clearModels();
         scene.add(mesh);
@@ -85,3 +106,4 @@ export async function loadModel(url) {
     if (statusEl) statusEl.textContent += "\nUnknown model extension.";
   }
 }
+
