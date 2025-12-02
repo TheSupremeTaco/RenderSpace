@@ -1,6 +1,5 @@
 import os
 import datetime
-from pathlib import Path
 from uuid import uuid4
 
 from flask import Flask, request, jsonify
@@ -12,6 +11,7 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 
 GCS_INPUT_BUCKET = os.environ.get("GCS_INPUT_BUCKET", "renderspace-inputs")
+URL_SIGNER_SERVICE_ACCOUNT = os.environ.get("URL_SIGNER_SERVICE_ACCOUNT")
 
 storage_client = storage.Client()
 
@@ -57,48 +57,52 @@ def upload():
 @app.route("/api/init-upload", methods=["POST"])
 def init_upload():
     try:
-        data = request.get_json(force=True) or {}
-        filename = data.get("filename")
-        if not filename:
-            return jsonify({"error": "filename required"}), 400
+      data = request.get_json(force=True) or {}
+      filename = data.get("filename")
+      if not filename:
+          return jsonify({"error": "filename required"}), 400
 
-        content_type = data.get("contentType") or "application/octet-stream"
+      content_type = data.get("contentType") or "application/octet-stream"
 
-        job_id = uuid4().hex
-        object_name = f"inputs/{job_id}/{filename}"
+      job_id = uuid4().hex
+      object_name = f"inputs/{job_id}/{filename}"
 
-        bucket = storage_client.bucket(GCS_INPUT_BUCKET)
-        blob = bucket.blob(object_name)
+      bucket = storage_client.bucket(GCS_INPUT_BUCKET)
+      blob = bucket.blob(object_name)
 
-        # Keyless signed URLs: library uses the attached service account +
-        # IAM Credentials API because we're running on Cloud Run and the
-        # SA has Service Account Token Creator.
-        upload_url = blob.generate_signed_url(
-            version="v4",
-            expiration=datetime.timedelta(minutes=15),
-            method="PUT",
-            content_type=content_type,
-        )
+      kwargs = {}
+      if URL_SIGNER_SERVICE_ACCOUNT:
+          # This triggers keyless signing via IAM Credentials API
+          kwargs["service_account_email"] = URL_SIGNER_SERVICE_ACCOUNT
 
-        download_url = blob.generate_signed_url(
-            version="v4",
-            expiration=datetime.timedelta(hours=1),
-            method="GET",
-        )
+      upload_url = blob.generate_signed_url(
+          version="v4",
+          expiration=datetime.timedelta(minutes=15),
+          method="PUT",
+          content_type=content_type,
+          **kwargs,
+      )
 
-        gcs_path = f"gs://{GCS_INPUT_BUCKET}/{object_name}"
+      download_url = blob.generate_signed_url(
+          version="v4",
+          expiration=datetime.timedelta(hours=1),
+          method="GET",
+          **kwargs,
+      )
 
-        return jsonify(
-            {
-                "jobId": job_id,
-                "uploadUrl": upload_url,
-                "downloadUrl": download_url,
-                "gcsPath": gcs_path,
-            }
-        )
+      gcs_path = f"gs://{GCS_INPUT_BUCKET}/{object_name}"
+
+      return jsonify(
+          {
+              "jobId": job_id,
+              "uploadUrl": upload_url,
+              "downloadUrl": download_url,
+              "gcsPath": gcs_path,
+          }
+      )
     except Exception as e:
-        app.logger.exception("init-upload failed")
-        return jsonify({"error": str(e)}), 500
+      app.logger.exception("init-upload failed")
+      return jsonify({"error": str(e)}), 500
 
 
 @app.route("/healthz")
