@@ -74,53 +74,56 @@ function clearModels() {
  * Load a model URL (PLY or GLTF/GLB) into the scene.
  * Returns a Promise that resolves when the model is loaded.
  */
-export function loadModel(url) {
-  const lower = url.toLowerCase();
+export async function loadModel(url) {
+  const statusEl = document.getElementById("status");
+  statusEl.textContent += `\nLoading model: ${url}`;
 
-  return new Promise((resolve, reject) => {
-    if (lower.endsWith(".ply")) {
-      const loader = new PLYLoader();
-      loader.load(
-        url,
-        (geometry) => {
-          geometry.computeVertexNormals();
-          const material = new THREE.MeshStandardMaterial({ flatShading: true });
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
+  // Ignore query string when checking extension
+  const cleanUrl = url.split("?")[0];
+  const lower = cleanUrl.toLowerCase();
 
-          mesh.position.set(0, 0, 0);
-          mesh.scale.set(1, 1, 1);
+  if (lower.endsWith(".ply")) {
+    const loader = new THREE.PLYLoader();
+    loader.load(
+      url, // full signed URL with query params
+      (geometry) => {
+        geometry.computeVertexNormals();
+        const material = new THREE.MeshStandardMaterial({ flatShading: true });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
 
-          clearModels();
-          scene.add(mesh);
-          resolve(mesh);
-        },
-        undefined,
-        (err) => {
-          console.error("PLY load error:", err);
-          reject(err);
-        }
-      );
-    } else if (lower.endsWith(".gltf") || lower.endsWith(".glb")) {
-      const loader = new GLTFLoader();
-      loader.load(
-        url,
-        (gltf) => {
-          clearModels();
-          scene.add(gltf.scene);
-          resolve(gltf.scene);
-        },
-        undefined,
-        (err) => {
-          console.error("GLTF/GLB load error:", err);
-          reject(err);
-        }
-      );
-    } else {
-      const err = new Error("Unknown model extension: " + url);
-      console.error(err);
-      reject(err);
-    }
-  });
+        mesh.position.set(0, 0, 0);
+        mesh.scale.set(1, 1, 1);
+
+        clearModels();
+        scene.add(mesh);
+        statusEl.textContent += "\nPLY model loaded.";
+      },
+      undefined,
+      (err) => {
+        console.error("PLY load error:", err);
+        statusEl.textContent += `\nError loading PLY: ${err}`;
+      }
+    );
+  } else if (lower.endsWith(".gltf") || lower.endsWith(".glb")) {
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      url,
+      (gltf) => {
+        clearModels();
+        scene.add(gltf.scene);
+        statusEl.textContent += "\nGLTF/GLB model loaded.";
+      },
+      undefined,
+      (err) => {
+        console.error("GLTF/GLB load error:", err);
+        statusEl.textContent += `\nError loading GLTF/GLB: ${err}`;
+      }
+    );
+  } else {
+    console.warn("Unknown model extension for URL:", url);
+    statusEl.textContent += "\nUnknown model extension.";
+  }
 }
+
