@@ -11,7 +11,6 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 
-# GCS bucket for large uploads (images / big PLYs)
 GCS_INPUT_BUCKET = os.environ.get("GCS_INPUT_BUCKET", "renderspace-inputs")
 
 storage_client = storage.Client()
@@ -71,6 +70,9 @@ def init_upload():
         bucket = storage_client.bucket(GCS_INPUT_BUCKET)
         blob = bucket.blob(object_name)
 
+        # Keyless signed URLs: library uses the attached service account +
+        # IAM Credentials API because we're running on Cloud Run and the
+        # SA has Service Account Token Creator.
         upload_url = blob.generate_signed_url(
             version="v4",
             expiration=datetime.timedelta(minutes=15),
