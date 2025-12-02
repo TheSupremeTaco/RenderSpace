@@ -98,6 +98,7 @@ export async function loadModel(url) {
 
       const material = new THREE.MeshStandardMaterial({ flatShading: true });
       const mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = Math.PI;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.scale.set(scale, scale, scale);
