@@ -63,37 +63,38 @@ export async function loadModel(url) {
     loader.load(
       url,
       (geometry) => {
-        // Ensure normals
         geometry.computeVertexNormals();
-
-        // 2) Center and normalize size
+  
+        // --- Normalize position and size ---
         geometry.computeBoundingBox();
         const bbox = geometry.boundingBox;
+  
         const size = new THREE.Vector3();
         bbox.getSize(size);
-
-        const center = new THREE.Vector3();
-        bbox.getCenter(center);
-
-        // Move geometry so its center is at the origin
-        geometry.translate(-center.x, -center.y, -center.z);
-
-        // Uniform scale so max dimension ~ 1 unit
+  
+        // Center in X and Z, but put the base at Y = 0
+        const centerX = (bbox.min.x + bbox.max.x) / 2;
+        const centerZ = (bbox.min.z + bbox.max.z) / 2;
+  
+        // translate so:
+        //  - X/Z are centered around 0
+        //  - min Y sits at 0 (on the "floor")
+        geometry.translate(-centerX, -bbox.min.y, -centerZ);
+  
+        // Uniform scale so the largest dimension is ~1 unit
         const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
         const scale = 1.0 / maxDim;
-
-        const material = new THREE.MeshStandardMaterial({
-          flatShading: true,
-        });
+  
+        const material = new THREE.MeshStandardMaterial({ flatShading: true });
         const mesh = new THREE.Mesh(geometry, material);
-
+  
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.scale.set(scale, scale, scale);
-
+  
         clearModels();
         scene.add(mesh);
-
+  
         if (statusEl) statusEl.textContent += "\nPLY model loaded.";
       },
       undefined,
