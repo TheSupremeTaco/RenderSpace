@@ -1,15 +1,13 @@
-/* global THREE */
+// src/viewer.js
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 let scene, camera, renderer, controls;
-let statusEl;
 
-// ---------------------------------------------------------------------
-// Viewer setup
-// ---------------------------------------------------------------------
 export function initViewer() {
-  statusEl = document.getElementById("status");
   const container = document.getElementById("viewer-container");
-
   const width = container.clientWidth || window.innerWidth;
   const height = container.clientHeight || window.innerHeight * 0.7;
 
@@ -21,18 +19,14 @@ export function initViewer() {
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(width, height);
-
-  // Clear anything old and attach canvas
-  container.innerHTML = "";
   container.appendChild(renderer.domElement);
 
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
 
   const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
   scene.add(light);
 
-  // Axes helper so you can see orientation
   const axes = new THREE.AxesHelper(1);
   scene.add(axes);
 
@@ -42,38 +36,30 @@ export function initViewer() {
 function animate() {
   requestAnimationFrame(animate);
   if (controls) controls.update();
-  if (renderer && scene && camera) {
-    renderer.render(scene, camera);
-  }
+  renderer.render(scene, camera);
 }
 
 function clearModels() {
-  // Keep light + axes (first 2 children), remove the rest
+  // keep first 2 children (light + axes)
   while (scene.children.length > 2) {
     scene.remove(scene.children[2]);
   }
 }
 
-// ---------------------------------------------------------------------
-// Model loading
-// ---------------------------------------------------------------------
-export function loadModel(url) {
-  if (!statusEl) {
-    statusEl = document.getElementById("status");
-  }
+export async function loadModel(rawUrl) {
+  const statusEl = document.getElementById("status");
+  statusEl.textContent += `\nLoading model: ${rawUrl}`;
 
-  statusEl.textContent += `\nLoading model: ${url}`;
+  // strip query string so extension check works
+  const urlObj = new URL(rawUrl, window.location.origin);
+  const pathname = urlObj.pathname.toLowerCase();
 
-  // Ignore query string when checking extension
-  const urlForExt = url.split("?")[0].toLowerCase();
-
-  if (urlForExt.endsWith(".ply")) {
-    const loader = new THREE.PLYLoader();
+  if (pathname.endsWith(".ply")) {
+    const loader = new PLYLoader();
     loader.load(
-      url,
-      geometry => {
+      rawUrl,
+      (geometry) => {
         geometry.computeVertexNormals();
-
         const material = new THREE.MeshStandardMaterial({ flatShading: true });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
@@ -87,30 +73,27 @@ export function loadModel(url) {
         statusEl.textContent += "\nPLY model loaded.";
       },
       undefined,
-      err => {
+      (err) => {
         console.error("PLY load error:", err);
         statusEl.textContent += `\nError loading PLY: ${err}`;
       }
     );
-  } else if (urlForExt.endsWith(".gltf") || urlForExt.endsWith(".glb")) {
-    const loader = new THREE.GLTFLoader();
+  } else if (pathname.endsWith(".gltf") || pathname.endsWith(".glb")) {
+    const loader = new GLTFLoader();
     loader.load(
-      url,
-      gltf => {
+      rawUrl,
+      (gltf) => {
         clearModels();
         scene.add(gltf.scene);
         statusEl.textContent += "\nGLTF/GLB model loaded.";
       },
       undefined,
-      err => {
+      (err) => {
         console.error("GLTF/GLB load error:", err);
         statusEl.textContent += `\nError loading GLTF/GLB: ${err}`;
       }
     );
   } else {
-    const msg =
-      "\nUnknown model extension – expected .ply, .gltf or .glb (query string is fine).";
-    console.warn(msg, url);
-    statusEl.textContent += msg;
+    statusEl.textContent += "\nUnknown model extension.";
   }
 }
