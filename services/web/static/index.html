@@ -1,8 +1,9 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>RenderSpace</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
         margin: 0;
@@ -20,33 +21,18 @@
         height: 70vh;
       }
     </style>
+    <script type="module" crossorigin src="/assets/index-H2XgdfhK.js"></script>
   </head>
   <body>
     <form id="upload-form">
-      <input
-        type="file"
-        id="file-input"
-        name="file"
-        accept="image/*"
-        required
-      />
-      <button type="submit">Upload &amp; Reconstruct</button>
-    </form>
+      <input id="file-input" type="file" accept=".ply" />
+      <button id="upload-btn">Upload &amp; View PLY</button>
+      <pre id="status"></pre>
+      <div id="viewer-container"></div> <!-- used by viewer.js -->      
+    </form>    
 
     <pre id="status"></pre>
     <div id="viewer-container"></div>
 
-    <!-- Local Three.js and loaders, served by Flask from /static/js/... -->
-    <script src="/js/three.min.js"></script>
-    <script src="/js/OrbitControls.js"></script>
-    <script src="/js/PLYLoader.js"></script>
-
-    <!-- Sanity check: should print "THREE present? true" -->
-    <script>
-      console.log("THREE present?", typeof THREE !== "undefined");
-    </script>
-
-    <!-- Your viewer logic (must be last) -->
-    <script src="/js/viewer.js"></script>
   </body>
 </html>

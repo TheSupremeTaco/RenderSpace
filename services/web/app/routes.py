@@ -134,23 +134,6 @@ def upload_local():
 
 @app.route("/api/init-upload", methods=["POST"])
 def init_upload():
-    """
-    Returns signed URLs so the browser can upload directly to GCS.
-
-    Request JSON:
-      {
-        "filename": "table_test_gaussian.ply",
-        "contentType": "application/octet-stream"   # optional
-      }
-
-    Response JSON (200):
-      {
-        "jobId": "...",
-        "uploadUrl": "https://storage.googleapis.com/.... (signed PUT)",
-        "downloadUrl": "https://storage.googleapis.com/.... (signed GET)",
-        "gcsPath": "gs://bucket/inputs/<jobId>/<filename>"
-      }
-    """
     try:
         data = request.get_json(force=True) or {}
         filename = data.get("filename")
@@ -168,7 +151,6 @@ def init_upload():
         bucket = storage_client.bucket(GCS_INPUT_BUCKET)
         blob = bucket.blob(object_name)
 
-        # Signed URL for PUT (upload from browser → GCS)
         upload_url = blob.generate_signed_url(
             version="v4",
             expiration=datetime.timedelta(minutes=15),
@@ -177,7 +159,6 @@ def init_upload():
             credentials=signing_credentials,
         )
 
-        # Signed URL for GET (viewer loads the PLY)
         download_url = blob.generate_signed_url(
             version="v4",
             expiration=datetime.timedelta(hours=1),
@@ -187,6 +168,7 @@ def init_upload():
 
         gcs_path = f"gs://{GCS_INPUT_BUCKET}/{object_name}"
 
+        # IMPORTANT: camelCase keys
         return jsonify(
             {
                 "jobId": job_id,
@@ -198,6 +180,7 @@ def init_upload():
     except Exception as e:
         app.logger.exception("init-upload failed")
         return jsonify({"error": str(e)}), 500
+
 
 
 # ---------------------------------------------------------------------------
