@@ -21,68 +21,66 @@ function setup() {
 
   async function handleUpload(event) {
     event.preventDefault();
-
-    if (!fileInput.files.length) {
-      statusEl.textContent = "Select a .ply file first.";
+    const file = fileInput.files[0];
+    if (!file) {
+      statusEl.textContent = "Please choose a .ply file first.";
       return;
     }
-
-    const file = fileInput.files[0];
-    const contentType =
-      file.type && file.type !== "" ? file.type : "application/octet-stream";
-
-    try {
-      // 1) Ask backend for signed URLs
-      statusEl.textContent = "Requesting upload URL...";
-
-      const initResp = await fetch("/api/init-upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: file.name,
-          contentType,
-        }),
-      });
-
-      if (!initResp.ok) {
-        const errText = await initResp.text();
-        console.error("init-upload error:", initResp.status, errText);
-        statusEl.textContent = `init-upload failed (${initResp.status}).`;
-        return;
-      }
-
-      const { jobId, uploadUrl, downloadUrl, gcsPath } =
-        await initResp.json();
-
-      // 2) Upload file directly to GCS via signed URL
-      statusEl.textContent = "Uploading model to cloud storage...";
-
-      const putResp = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": contentType,
-        },
-        body: file,
-      });
-
-      if (!putResp.ok) {
-        const putText = await putResp.text().catch(() => "");
-        console.error("Upload error:", putResp.status, putText);
-        statusEl.textContent = `Upload failed (${putResp.status}).`;
-        return;
-      }
-
-      // 3) Load the PLY from the signed download URL
-      statusEl.textContent = `Upload complete (job ${jobId}). Loading model...`;
-
-      await loadModel(downloadUrl);
-
-      statusEl.textContent = `PLY model loaded from cloud (job ${jobId}).`;
-      console.log("GCS source:", gcsPath);
-    } catch (err) {
-      console.error("Unexpected upload error:", err);
-      statusEl.textContent = "Unexpected error during upload.";
+  
+    statusEl.textContent = "Initializing upload...";
+  
+    // 1) Ask backend for signed URL + job info
+    const initResp = await fetch("/api/init-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name }),
+    });
+  
+    if (!initResp.ok) {
+      statusEl.textContent = "init-upload failed.";
+      return;
     }
+  
+    const initData = await initResp.json();
+    const { job_id, upload_url, model_url, gcs_path } = initData;
+  
+    statusEl.textContent =
+      `Job: ${job_id}\nUploading to GCS...\n`;
+  
+    // 2) Upload file directly to GCS via signed URL
+    const uploadResp = await fetch(upload_url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
+      body: file,
+    });
+  
+    if (!uploadResp.ok) {
+      statusEl.textContent += "\nUpload failed.";
+      return;
+    }
+  
+    statusEl.textContent += "Upload complete.\nStarting Trellis job...";
+  
+    // 3) Tell backend to start the worker job
+    const jobResp = await fetch("/api/start-job", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id, gcs_path }),
+    });
+  
+    if (!jobResp.ok) {
+      statusEl.textContent += "\nTrellis job start failed.";
+      return;
+    }
+  
+    const jobInfo = await jobResp.json();
+    statusEl.textContent += `\nTrellis worker response: ${JSON.stringify(jobInfo)}`;
+  
+    // 4) Load the uploaded PLY into the viewer (unchanged)
+    await loadModel(model_url);   // your existing viewer hook
+    statusEl.textContent += "\nPLY model loaded.";
   }
 
   uploadBtn.addEventListener("click", handleUpload);

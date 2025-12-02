@@ -1,4 +1,7 @@
 import os
+import uuid
+import requests
+from flask import Blueprint, jsonify, request, current_app
 import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -35,6 +38,10 @@ GCS_INPUT_BUCKET = os.environ.get("GCS_INPUT_BUCKET", "renderspace-inputs")
 # Path to JSON key file for the signer service account.
 # In Cloud Run this should be something like: /secrets/url-signer-key.json
 SIGNER_KEY_PATH = os.environ.get("URL_SIGNER_KEY_PATH")
+
+# URL of the GPU worker FastAPI service
+# e.g. WORKER_URL="http://34.125.83.54:8000"
+WORKER_URL = os.environ.get("WORKER_URL", "http://127.0.0.1:8000")
 
 # Client for normal Storage operations (uses Cloud Run service account)
 storage_client = storage.Client()
@@ -190,4 +197,51 @@ def init_upload():
         )
     except Exception as e:
         app.logger.exception("init-upload failed")
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Start Trellis job on GPU worker
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/start-job", methods=["POST"])
+def start_job():
+    """
+    Called by the frontend after the file is uploaded to GCS.
+
+    Request JSON:
+      {
+        "jobId": "...",
+        "gcsPath": "gs://bucket/inputs/<jobId>/<filename>"
+      }
+
+    This method forwards the request to the GPU worker's /jobs endpoint.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        job_id = data.get("jobId")
+        gcs_path = data.get("gcsPath")
+
+        if not job_id or not gcs_path:
+            return jsonify({"error": "jobId and gcsPath required"}), 400
+
+        payload = {
+            "job_id": job_id,
+            "input_gcs_path": gcs_path,
+            "output_dir": "/opt/trellis_outputs",
+        }
+
+        resp = requests.post(f"{WORKER_URL}/jobs", json=payload, timeout=20)
+        resp.raise_for_status()
+
+        try:
+            job_info = resp.json()
+        except Exception:
+            job_info = {"raw": resp.text}
+
+        return jsonify(job_info), 200
+
+    except Exception as e:
+        current_app.logger.exception("start-job failed")
         return jsonify({"error": str(e)}), 500
