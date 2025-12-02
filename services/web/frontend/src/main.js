@@ -1,74 +1,97 @@
-// main.js (only the upload handler + wiring shown)
+// src/main.js
 
-import { initViewer, loadModel } from "./viewer"; // whatever you export today
+// If you have a global style file keep this, otherwise you can remove it.
+// import "./style.css";
 
-const fileInput = document.getElementById("file-input");
-const uploadBtn = document.getElementById("upload-btn");
-const statusEl = document.getElementById("status");
+import { initViewer, loadModel } from "./viewer";
 
-async function handleUpload(event) {
-  event.preventDefault();
+function setup() {
+  const fileInput = document.getElementById("file-input");
+  const uploadBtn = document.getElementById("upload-btn");
+  const statusEl = document.getElementById("status");
 
-  if (!fileInput.files.length) {
-    statusEl.textContent = "Select a .ply file first.";
+  if (!fileInput || !uploadBtn || !statusEl) {
+    console.error(
+      "Missing DOM elements. Expected #file-input, #upload-btn, #status."
+    );
     return;
   }
 
-  const file = fileInput.files[0];
-  const contentType =
-    file.type && file.type !== "" ? file.type : "application/octet-stream";
+  initViewer(); // sets up Three.js scene and default grid, etc.
 
-  try {
-    statusEl.textContent = "Requesting upload URL...";
+  async function handleUpload(event) {
+    event.preventDefault();
 
-    // 1) Ask backend for signed URLs
-    const initResp = await fetch("/api/init-upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: file.name,
-        contentType,
-      }),
-    });
-
-    if (!initResp.ok) {
-      const errText = await initResp.text();
-      statusEl.textContent = `init-upload failed: ${initResp.status}`;
-      console.error("init-upload error:", errText);
+    if (!fileInput.files.length) {
+      statusEl.textContent = "Select a .ply file first.";
       return;
     }
 
-    const { jobId, uploadUrl, downloadUrl, gcsPath } = await initResp.json();
+    const file = fileInput.files[0];
+    const contentType =
+      file.type && file.type !== "" ? file.type : "application/octet-stream";
 
-    // 2) Upload file directly to GCS
-    statusEl.textContent = "Uploading model to cloud storage...";
+    try {
+      // 1) Ask backend for signed URLs
+      statusEl.textContent = "Requesting upload URL...";
 
-    const putResp = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": contentType,
-      },
-      body: file,
-    });
+      const initResp = await fetch("/api/init-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType,
+        }),
+      });
 
-    if (!putResp.ok) {
-      statusEl.textContent = `Upload failed (${putResp.status})`;
-      console.error("Upload error:", putResp.status, await putResp.text());
-      return;
+      if (!initResp.ok) {
+        const errText = await initResp.text();
+        console.error("init-upload error:", initResp.status, errText);
+        statusEl.textContent = `init-upload failed (${initResp.status}).`;
+        return;
+      }
+
+      const { jobId, uploadUrl, downloadUrl, gcsPath } =
+        await initResp.json();
+
+      // 2) Upload file directly to GCS via signed URL
+      statusEl.textContent = "Uploading model to cloud storage...";
+
+      const putResp = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": contentType,
+        },
+        body: file,
+      });
+
+      if (!putResp.ok) {
+        const putText = await putResp.text().catch(() => "");
+        console.error("Upload error:", putResp.status, putText);
+        statusEl.textContent = `Upload failed (${putResp.status}).`;
+        return;
+      }
+
+      // 3) Load the PLY from the signed download URL
+      statusEl.textContent = `Upload complete (job ${jobId}). Loading model...`;
+
+      await loadModel(downloadUrl);
+
+      statusEl.textContent = `PLY model loaded from cloud (job ${jobId}).`;
+      console.log("GCS source:", gcsPath);
+    } catch (err) {
+      console.error("Unexpected upload error:", err);
+      statusEl.textContent = "Unexpected error during upload.";
     }
-
-    // 3) Load the PLY from the signed download URL
-    statusEl.textContent = `Upload complete. Job ${jobId}. Loading model...`;
-
-    await loadModel(downloadUrl); // your existing viewer loader
-
-    statusEl.textContent = `PLY model loaded from cloud. Job ${jobId}.`;
-    console.log("GCS source:", gcsPath);
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = "Unexpected error during upload.";
   }
+
+  uploadBtn.addEventListener("click", handleUpload);
 }
 
-initViewer(); // your existing scene setup
-uploadBtn.addEventListener("click", handleUpload);
+// For Vite, this is usually not strictly necessary, but it’s safe
+// in case the script is ever moved into <head>.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setup);
+} else {
+  setup();
+}

@@ -24,14 +24,10 @@
   </head>
   <body>
     <form id="upload-form">
-      <input
-        type="file"
-        id="file-input"
-        name="file"
-        accept=".ply"
-        required
-      />
-      <button type="submit">Upload &amp; View PLY</button>
+      <input id="file-input" type="file" accept=".ply" />
+      <button id="upload-btn">Upload &amp; View PLY</button>
+      <pre id="status"></pre>
+      <div id="viewer-container"></div> <!-- used by viewer.js -->      
     </form>    
 
     <pre id="status"></pre>
