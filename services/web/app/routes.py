@@ -1,17 +1,10 @@
 import os
-import uuid
-import requests
-from flask import Blueprint, jsonify, request, current_app
 import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from flask import (
-    Flask,
-    jsonify,
-    request,
-    send_from_directory,
-)
+import requests
+from flask import Flask, jsonify, request, send_from_directory
 from google.cloud import storage
 from google.oauth2 import service_account
 
@@ -39,9 +32,9 @@ GCS_INPUT_BUCKET = os.environ.get("GCS_INPUT_BUCKET", "renderspace-inputs")
 # In Cloud Run this should be something like: /secrets/url-signer-key.json
 SIGNER_KEY_PATH = os.environ.get("URL_SIGNER_KEY_PATH")
 
-# URL of the GPU worker FastAPI service
-# e.g. WORKER_URL="http://34.125.83.54:8000"
-WORKER_URL = os.environ.get("WORKER_URL", "http://127.0.0.1:8000")
+# URL of the GPU worker FastAPI /jobs endpoint, for example:
+#   TRELLIS_WORKER_URL="http://34.125.83.54:8000/jobs"
+TRELLIS_WORKER_URL = os.environ.get("TRELLIS_WORKER_URL")
 
 # Client for normal Storage operations (uses Cloud Run service account)
 storage_client = storage.Client()
@@ -69,15 +62,17 @@ def healthz():
     return "ok", 200
 
 
-# Optionally: SPA catch-all – any unknown path (that is not /api/…) returns index.html
+# SPA catch-all – any unknown path (that is not /api/…) returns index.html
 @app.route("/<path:path>")
 def spa_catch_all(path: str):
     if path.startswith("api/"):
         return jsonify({"error": "Not Found"}), 404
+
     # If the requested file exists in static, serve it
     candidate = STATIC_DIR / path
     if candidate.is_file():
         return send_from_directory(STATIC_DIR, path)
+
     # Otherwise fall back to SPA shell
     return send_from_directory(STATIC_DIR, "index.html")
 
@@ -134,6 +129,20 @@ def upload_local():
 
 @app.route("/api/init-upload", methods=["POST"])
 def init_upload():
+    """
+    Returns signed URLs so the browser can upload directly to GCS.
+
+    Request JSON:
+      { "filename": "table_test_gaussian.ply", "contentType": "...optional..." }
+
+    Response JSON:
+      {
+        "jobId": "...",
+        "uploadUrl": "...signed PUT...",
+        "downloadUrl": "...signed GET...",
+        "gcsPath": "gs://bucket/inputs/<jobId>/<filename>"
+      }
+    """
     try:
         data = request.get_json(force=True) or {}
         filename = data.get("filename")
@@ -151,6 +160,7 @@ def init_upload():
         bucket = storage_client.bucket(GCS_INPUT_BUCKET)
         blob = bucket.blob(object_name)
 
+        # Signed URL for PUT (upload from browser → GCS)
         upload_url = blob.generate_signed_url(
             version="v4",
             expiration=datetime.timedelta(minutes=15),
@@ -159,6 +169,7 @@ def init_upload():
             credentials=signing_credentials,
         )
 
+        # Signed URL for GET (viewer loads the PLY)
         download_url = blob.generate_signed_url(
             version="v4",
             expiration=datetime.timedelta(hours=1),
@@ -168,7 +179,6 @@ def init_upload():
 
         gcs_path = f"gs://{GCS_INPUT_BUCKET}/{object_name}"
 
-        # IMPORTANT: camelCase keys
         return jsonify(
             {
                 "jobId": job_id,
@@ -180,7 +190,6 @@ def init_upload():
     except Exception as e:
         app.logger.exception("init-upload failed")
         return jsonify({"error": str(e)}), 500
-
 
 
 # ---------------------------------------------------------------------------
@@ -209,22 +218,52 @@ def start_job():
         if not job_id or not gcs_path:
             return jsonify({"error": "jobId and gcsPath required"}), 400
 
+        if not TRELLIS_WORKER_URL:
+            app.logger.error("TRELLIS_WORKER_URL is not configured")
+            return jsonify({"error": "TRELLIS_WORKER_URL is not configured"}), 500
+
+        # Payload expected by the FastAPI worker
         payload = {
             "job_id": job_id,
-            "input_gcs_path": gcs_path,
-            "output_dir": "/opt/trellis_outputs",
+            "input_path": gcs_path,  # worker will later download from this GCS path
         }
 
-        resp = requests.post(f"{WORKER_URL}/jobs", json=payload, timeout=20)
-        resp.raise_for_status()
+        app.logger.info(
+            "Posting job to worker %s with payload %s",
+            TRELLIS_WORKER_URL,
+            payload,
+        )
 
+        resp = requests.post(TRELLIS_WORKER_URL, json=payload, timeout=30)
+
+        # Try to decode JSON either way, so we can surface worker errors
         try:
-            job_info = resp.json()
+            worker_body = resp.json()
         except Exception:
-            job_info = {"raw": resp.text}
+            worker_body = resp.text
 
-        return jsonify(job_info), 200
+        if not resp.ok:
+            # Surface as 502 so frontend can see real worker error
+            return (
+                jsonify(
+                    {
+                        "error": "Worker call failed",
+                        "worker_status": resp.status_code,
+                        "worker_body": worker_body,
+                    }
+                ),
+                502,
+            )
+
+        # Happy path
+        return jsonify(
+            {
+                "status": "ok",
+                "jobId": job_id,
+                "worker": worker_body,
+            }
+        )
 
     except Exception as e:
-        current_app.logger.exception("start-job failed")
+        app.logger.exception("start-job failed")
         return jsonify({"error": str(e)}), 500
