@@ -1,17 +1,15 @@
-// src/viewer.js
-import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+/* global THREE */
 
 let scene, camera, renderer, controls;
+let statusEl;
 
-/**
- * Initialise the Three.js viewer.
- * Called once from src/main.js.
- */
+// ---------------------------------------------------------------------
+// Viewer setup
+// ---------------------------------------------------------------------
 export function initViewer() {
+  statusEl = document.getElementById("status");
   const container = document.getElementById("viewer-container");
+
   const width = container.clientWidth || window.innerWidth;
   const height = container.clientHeight || window.innerHeight * 0.7;
 
@@ -23,33 +21,22 @@ export function initViewer() {
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(width, height);
+
+  // Clear anything old and attach canvas
   container.innerHTML = "";
   container.appendChild(renderer.domElement);
 
-  controls = new OrbitControls(camera, renderer.domElement);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
 
   const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
   scene.add(light);
 
+  // Axes helper so you can see orientation
   const axes = new THREE.AxesHelper(1);
   scene.add(axes);
 
-  window.addEventListener("resize", onWindowResize);
-
   animate();
-}
-
-function onWindowResize() {
-  if (!renderer || !camera) return;
-
-  const container = document.getElementById("viewer-container");
-  const width = container.clientWidth || window.innerWidth;
-  const height = container.clientHeight || window.innerHeight * 0.7;
-
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-  renderer.setSize(width, height);
 }
 
 function animate() {
@@ -60,34 +47,33 @@ function animate() {
   }
 }
 
-/**
- * Remove previously loaded models, but keep lights / helpers.
- */
 function clearModels() {
-  // keep first two children (light + axes)
+  // Keep light + axes (first 2 children), remove the rest
   while (scene.children.length > 2) {
     scene.remove(scene.children[2]);
   }
 }
 
-/**
- * Load a model URL (PLY or GLTF/GLB) into the scene.
- * Returns a Promise that resolves when the model is loaded.
- */
-export async function loadModel(url) {
-  const statusEl = document.getElementById("status");
+// ---------------------------------------------------------------------
+// Model loading
+// ---------------------------------------------------------------------
+export function loadModel(url) {
+  if (!statusEl) {
+    statusEl = document.getElementById("status");
+  }
+
   statusEl.textContent += `\nLoading model: ${url}`;
 
   // Ignore query string when checking extension
-  const cleanUrl = url.split("?")[0];
-  const lower = cleanUrl.toLowerCase();
+  const urlForExt = url.split("?")[0].toLowerCase();
 
-  if (lower.endsWith(".ply")) {
+  if (urlForExt.endsWith(".ply")) {
     const loader = new THREE.PLYLoader();
     loader.load(
-      url, // full signed URL with query params
-      (geometry) => {
+      url,
+      geometry => {
         geometry.computeVertexNormals();
+
         const material = new THREE.MeshStandardMaterial({ flatShading: true });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
@@ -101,29 +87,30 @@ export async function loadModel(url) {
         statusEl.textContent += "\nPLY model loaded.";
       },
       undefined,
-      (err) => {
+      err => {
         console.error("PLY load error:", err);
         statusEl.textContent += `\nError loading PLY: ${err}`;
       }
     );
-  } else if (lower.endsWith(".gltf") || lower.endsWith(".glb")) {
+  } else if (urlForExt.endsWith(".gltf") || urlForExt.endsWith(".glb")) {
     const loader = new THREE.GLTFLoader();
     loader.load(
       url,
-      (gltf) => {
+      gltf => {
         clearModels();
         scene.add(gltf.scene);
         statusEl.textContent += "\nGLTF/GLB model loaded.";
       },
       undefined,
-      (err) => {
+      err => {
         console.error("GLTF/GLB load error:", err);
         statusEl.textContent += `\nError loading GLTF/GLB: ${err}`;
       }
     );
   } else {
-    console.warn("Unknown model extension for URL:", url);
-    statusEl.textContent += "\nUnknown model extension.";
+    const msg =
+      "\nUnknown model extension – expected .ply, .gltf or .glb (query string is fine).";
+    console.warn(msg, url);
+    statusEl.textContent += msg;
   }
 }
-
