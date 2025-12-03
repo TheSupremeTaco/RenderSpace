@@ -31,49 +31,48 @@ async function callRoomSetup(roomType, roomSize, style) {
 
 // Render mood board – first image from each product
 function renderMoodBoard(moodBoard) {
-  const grid = document.querySelector("#mood-board-grid");
-  if (!grid) return;
-  grid.innerHTML = "";
+  if (!moodBoardGrid) return;
+
+  moodBoardGrid.innerHTML = "";
+
+  moodBoardIntro.textContent =
+    "Here’s a 5-piece mood board based on your room and style. Does this feel right?";
 
   moodBoard.products.forEach((p) => {
-    // Use image_url from the API, but also support imageUrl just in case
     const imgSrc = p.image_url || p.imageUrl || null;
 
     // Make the whole card a link
     const card = document.createElement("a");
-    card.className = "rs-card";
+    card.className = "mood-card";
     card.href = p.product_url || "#";
     card.target = "_blank";
     card.rel = "noopener noreferrer";
 
-    // Image
     const img = document.createElement("img");
-    img.className = "rs-card-image";
+    // .mood-card img is styled in CSS
     img.alt = p.title || "Furniture item";
     img.loading = "lazy";
 
     if (imgSrc) {
       img.src = imgSrc;
     } else {
-      img.src = "/static/assets/no-image.svg"; // or whatever placeholder you use
+      img.src = "/assets/no-image.svg"; // adjust to your actual placeholder path
     }
 
-    // If the remote host blocks hotlinking, fall back to placeholder
     img.onerror = () => {
       console.warn("Image failed to load for", p.title, imgSrc);
-      img.src = "/static/assets/no-image.svg";
+      img.src = "/assets/no-image.svg";
     };
 
-    // Text content
     const body = document.createElement("div");
-    body.className = "rs-card-body";
+    body.className = "mood-card-body";
 
     const title = document.createElement("div");
-    title.className = "rs-card-title";
+    title.className = "mood-card-title";
     title.textContent = p.title || "Untitled item";
 
     const meta = document.createElement("div");
-    meta.className = "rs-card-meta";
+    meta.className = "mood-card-meta";
     const retailer = p.retailer || "";
     const price =
       typeof p.price === "number" ? `$${p.price.toFixed(2)}` : "—";
@@ -85,10 +84,12 @@ function renderMoodBoard(moodBoard) {
     card.appendChild(img);
     card.appendChild(body);
 
-    grid.appendChild(card);
+    moodBoardGrid.appendChild(card);
   });
-}
 
+  // Show the action buttons once we have a board
+  moodActions.style.display = "flex";
+}
 
 // Form submit → generate mood board
 roomForm.addEventListener("submit", async (e) => {
@@ -121,11 +122,9 @@ roomForm.addEventListener("submit", async (e) => {
   }
 });
 
-// "Looks good" – for now, just confirm; later you hook this into Trellis/3D
+// "Looks good"
 acceptMoodBoardBtn.addEventListener("click", () => {
   if (!currentProject || !currentMoodBoard) return;
-
-  // This is where you'll move on to the Trellis / 3D viewer step.
   alert(
     "Great! Mood board accepted. Next step is to generate 3D to place in the room viewer."
   );
