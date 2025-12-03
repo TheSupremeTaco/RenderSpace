@@ -31,51 +31,64 @@ async function callRoomSetup(roomType, roomSize, style) {
 
 // Render mood board – first image from each product
 function renderMoodBoard(moodBoard) {
-  moodBoardGrid.innerHTML = "";
-  const products = moodBoard.products || [];
+  const grid = document.querySelector("#mood-board-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
 
-  if (!products.length) {
-    moodBoardIntro.textContent =
-      "No matching furniture found. Try a different style.";
-    moodActions.style.display = "none";
-    return;
-  }
+  moodBoard.products.forEach((p) => {
+    // Use image_url from the API, but also support imageUrl just in case
+    const imgSrc = p.image_url || p.imageUrl || null;
 
-  moodBoardIntro.textContent =
-    "Here’s a 5-piece mood board based on your room and style. Does this feel right?";
+    // Make the whole card a link
+    const card = document.createElement("a");
+    card.className = "rs-card";
+    card.href = p.product_url || "#";
+    card.target = "_blank";
+    card.rel = "noopener noreferrer";
 
-  products.forEach((p) => {
-    const card = document.createElement("div");
-    card.className = "mood-card";
-
+    // Image
     const img = document.createElement("img");
-    img.src = p.image_url || "";
+    img.className = "rs-card-image";
     img.alt = p.title || "Furniture item";
+    img.loading = "lazy";
 
+    if (imgSrc) {
+      img.src = imgSrc;
+    } else {
+      img.src = "/static/assets/no-image.svg"; // or whatever placeholder you use
+    }
+
+    // If the remote host blocks hotlinking, fall back to placeholder
+    img.onerror = () => {
+      console.warn("Image failed to load for", p.title, imgSrc);
+      img.src = "/static/assets/no-image.svg";
+    };
+
+    // Text content
     const body = document.createElement("div");
-    body.className = "mood-card-body";
+    body.className = "rs-card-body";
 
     const title = document.createElement("div");
-    title.className = "mood-card-title";
+    title.className = "rs-card-title";
     title.textContent = p.title || "Untitled item";
 
     const meta = document.createElement("div");
-    meta.className = "mood-card-meta";
-    const retailer = p.retailer || "unknown retailer";
+    meta.className = "rs-card-meta";
+    const retailer = p.retailer || "";
     const price =
-      p.price != null && !isNaN(p.price) ? `$${p.price}` : "price TBD";
+      typeof p.price === "number" ? `$${p.price.toFixed(2)}` : "—";
     meta.textContent = `${retailer} • ${price}`;
 
     body.appendChild(title);
     body.appendChild(meta);
+
     card.appendChild(img);
     card.appendChild(body);
 
-    moodBoardGrid.appendChild(card);
+    grid.appendChild(card);
   });
-
-  moodActions.style.display = "flex";
 }
+
 
 // Form submit → generate mood board
 roomForm.addEventListener("submit", async (e) => {
