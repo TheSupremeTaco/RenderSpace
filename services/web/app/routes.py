@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import requests
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, current_app
 from google.cloud import storage
 from google.oauth2 import service_account
 
@@ -12,34 +12,27 @@ from google.oauth2 import service_account
 # Paths / Flask app
 # ---------------------------------------------------------------------------
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+# This file is services/web/app/routes.py
+# So parent() is services/web/app   (NOT parents[1])
+BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
 app = Flask(
     __name__,
     static_folder=str(STATIC_DIR),
-    static_url_path="",  # static files served from root (/assets, /uploads, etc.)
+    static_url_path="",  # static files served from root: /index.html, /js/..., /assets/...
 )
 
 # ---------------------------------------------------------------------------
 # GCS / signing configuration
 # ---------------------------------------------------------------------------
 
-# GCS bucket where uploads should go
 GCS_INPUT_BUCKET = os.environ.get("GCS_INPUT_BUCKET", "renderspace-inputs")
-
-# Path to JSON key file for the signer service account.
-# In Cloud Run this should be something like: /secrets/url-signer-key.json
 SIGNER_KEY_PATH = os.environ.get("URL_SIGNER_KEY_PATH")
-
-# URL of the GPU worker FastAPI /jobs endpoint, for example:
-#   TRELLIS_WORKER_URL="http://34.125.83.54:8000/jobs"
 TRELLIS_WORKER_URL = os.environ.get("TRELLIS_WORKER_URL")
 
-# Client for normal Storage operations (uses Cloud Run service account)
 storage_client = storage.Client()
 
-# Credentials used only for signing URLs (separate service account key)
 signing_credentials = None
 if SIGNER_KEY_PATH and os.path.exists(SIGNER_KEY_PATH):
     signing_credentials = service_account.Credentials.from_service_account_file(
@@ -50,10 +43,9 @@ if SIGNER_KEY_PATH and os.path.exists(SIGNER_KEY_PATH):
 # Frontend routes
 # ---------------------------------------------------------------------------
 
-
-@bp.route("/")
+@app.route("/")
 def index():
-    # Serve the static landing page: services/web/app/static/index.html
+    # Serve services/web/app/static/index.html
     return current_app.send_static_file("index.html")
 
 

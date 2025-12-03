@@ -1,8 +1,28 @@
-# llm_client.py
+# services/web/app/llm_client.py
 import json
+import random
+import sys
 from openai import OpenAI
 
 client = OpenAI()
+
+
+def _stub_products(style_query: str, max_items: int):
+    """Fallback if OpenAI/web_search fails."""
+    products = []
+    for i in range(max_items):
+        products.append(
+            {
+                "title": f"Demo item {i + 1} for {style_query}",
+                "retailer": "demo",
+                "product_url": "https://example.com",
+                "image_url": f"https://via.placeholder.com/300x200?text=Item+{i+1}",
+                "price": round(random.uniform(50, 500), 2),
+                "category": "other",
+                "tags": [style_query],
+            }
+        )
+    return {"style": style_query, "products": products}
 
 
 def call_style_source(style_query: str, max_items: int = 5):
@@ -12,18 +32,7 @@ def call_style_source(style_query: str, max_items: int = 5):
     Returns:
       {
         "style": "<normalized_style>",
-        "products": [
-          {
-            "title": "...",
-            "retailer": "wayfair" | "amazon",
-            "product_url": "...",
-            "image_url": "...",
-            "price": 123.45 or null,
-            "category": "bed" | "sofa" | "coffee_table" | "nightstand" | "chair" | "media_console" | "rug" | "other",
-            "tags": ["postmodern","light","curved_edges"]
-          },
-          ...
-        ]
+        "products": [ { ... }, ... ]
       }
     """
     system_msg = """
@@ -64,21 +73,24 @@ Return ONLY strict JSON in this exact shape:
 Do not add any explanation text outside the JSON.
 """
 
-    user_msg = f"""
-Style query: "{style_query}"
-Max items: {max_items}
-"""
+    user_msg = f'Style query: "{style_query}"\nMax items: {max_items}\n'
 
-    resp = client.responses.create(
-        model="gpt-4.1-mini",  # or another responses-capable model
-        input=[
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
-        ],
-        tools=[{"type": "web_search"}],
-    )
+    try:
+        resp = client.responses.create(
+            model="gpt-4.1-mini",  # adjust to a model you have access to
+            input=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            tools=[{"type": "web_search"}],
+        )
 
-    # Adjust this line if your SDK response structure is slightly different
-    text = resp.output[0].content[0].text
-    data = json.loads(text)
-    return data
+        # Adjust this if your SDK version differs
+        text = resp.output[0].content[0].text
+        data = json.loads(text)
+        return data
+    except Exception as e:
+        # Log the error so you can see it in the server logs
+        print(f"[call_style_source] Error calling OpenAI: {e}", file=sys.stderr, flush=True)
+        # Fallback to stub so the API still returns 200
+        return _stub_products(style_query, max_items)
