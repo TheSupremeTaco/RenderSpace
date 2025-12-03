@@ -19,9 +19,10 @@ from google.oauth2 import service_account
 # Paths
 # ---------------------------------------------------------------------------
 
-# This file is services/web/app/routes.py
-BASE_DIR = Path(__file__).resolve().parent        # .../app
-STATIC_DIR = BASE_DIR / "static"                  # .../app/static
+# services/web/app/routes.py
+# ...
+BASE_DIR = Path(__file__).resolve().parent        # /app/app
+STATIC_DIR = BASE_DIR.parent / "static"           # /app/static
 
 # ---------------------------------------------------------------------------
 # Blueprint
