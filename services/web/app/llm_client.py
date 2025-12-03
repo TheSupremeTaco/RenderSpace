@@ -91,8 +91,26 @@ Do not add any explanation text outside the JSON.
             tools=[{"type": "web_search"}],
         )
 
-        # Depending on SDK version, adjust this access pattern if needed
-        text = resp.output[0].content[0].text
+        # ---- robust extraction of the JSON text from resp ----
+        text = None
+        for item in getattr(resp, "output", []):
+            content = getattr(item, "content", None)
+            if not content:
+                # This covers things like ResponseFunctionWebSearch which
+                # do not have .content
+                continue
+
+            for part in content:
+                part_text = getattr(part, "text", None)
+                if part_text:
+                    text = part_text
+                    break
+
+            if text is not None:
+                break
+
+        if text is None:
+            raise RuntimeError(f"No text content found in response: {resp}")
 
         data = json.loads(text)
         return data
