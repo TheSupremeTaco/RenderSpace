@@ -8,23 +8,6 @@ bp_room = Blueprint("room", __name__)
 
 @bp_room.route("/api/room-setup", methods=["POST"])
 def room_setup():
-    """
-    Request JSON:
-    {
-      "roomType": "bedroom",
-      "roomSize": "12x14",  # or "small/medium/large"
-      "style": "postmodern"
-    }
-
-    Response JSON:
-    {
-      "project": { ... },
-      "moodBoard": {
-        "style": "...",
-        "products": [ ... ]
-      }
-    }
-    """
     data = request.get_json() or {}
 
     room_type = (data.get("roomType") or "").strip().lower()
@@ -34,11 +17,18 @@ def room_setup():
     if not room_type or not style:
         return jsonify({"error": "roomType and style are required"}), 400
 
-    # Combine style + room for a richer query to the agent
     style_query = f"{style} {room_type} furniture"
 
-    # Call LLM style/source agent for 5 pieces
-    style_data = call_style_source(style_query, max_items=5)
+    try:
+        style_data = call_style_source(style_query, max_items=5)
+    except Exception as e:
+        # Log full traceback to Cloud Run logs
+        current_app.logger.exception("call_style_source failed")
+        # Return readable error to the browser for now
+        return jsonify(
+            {"error": "style_source_failed", "detail": str(e)}
+        ), 500
+
     products = style_data.get("products", [])
 
     project_id = str(uuid.uuid4())
