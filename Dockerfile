@@ -41,11 +41,18 @@ COPY services/web ./
 COPY --from=frontend-builder /app/static ./static
 
 # Cloud Run will inject PORT, default to 8080 for local use
-ENV FLASK_APP=app.routes \
+# OLD:
+# ENV FLASK_APP=app.routes \
+#     PORT=8080
+# NEW:
+ENV FLASK_APP=app \
     PORT=8080
 
 # Expose port for local docker run (Cloud Run ignores EXPOSE)
 EXPOSE 8080
 
 # Use gunicorn as the HTTP server
-CMD ["bash", "-c", "gunicorn -b 0.0.0.0:${PORT:-8080} app.routes:app"]
+# OLD:
+# CMD ["bash", "-c", "gunicorn -b 0.0.0.0:${PORT:-8080} app.routes:app"]
+# NEW:
+CMD ["bash", "-c", "gunicorn -b 0.0.0.0:${PORT:-8080} app:app"]
