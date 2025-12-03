@@ -51,10 +51,10 @@ if SIGNER_KEY_PATH and os.path.exists(SIGNER_KEY_PATH):
 # ---------------------------------------------------------------------------
 
 
-@app.route("/")
+@bp.route("/")
 def index():
-    """Serve the built Vite index.html."""
-    return send_from_directory(STATIC_DIR, "index.html")
+    # Serve the static landing page: services/web/app/static/index.html
+    return current_app.send_static_file("index.html")
 
 
 @app.route("/healthz")
