@@ -1,5 +1,7 @@
+# app/llm_client.py
 import json
 import os
+import re
 import sys
 
 from openai import OpenAI
@@ -96,8 +98,7 @@ Do not add any explanation text outside the JSON.
         for item in getattr(resp, "output", []):
             content = getattr(item, "content", None)
             if not content:
-                # This covers things like ResponseFunctionWebSearch which
-                # do not have .content
+                # e.g. ResponseFunctionWebSearch has no .content
                 continue
 
             for part in content:
@@ -112,11 +113,29 @@ Do not add any explanation text outside the JSON.
         if text is None:
             raise RuntimeError(f"No text content found in response: {resp}")
 
-        data = json.loads(text)
+        raw_text = text.strip()
+        print(f"[call_style_source] Raw text from model:\n{raw_text}", file=sys.stderr)
+
+        # First attempt: assume it is pure JSON
+        try:
+            data = json.loads(raw_text)
+        except json.JSONDecodeError:
+            # Second attempt: pull out the first {...} block
+            match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+            if not match:
+                raise  # re-raise the original JSONDecodeError
+
+            candidate = match.group(0)
+            print(
+                "[call_style_source] Trying to parse JSON substring instead.",
+                file=sys.stderr,
+            )
+            data = json.loads(candidate)
+
         return data
 
     except Exception as e:
         # Log clearly so you see why live data failed
         print(f"[call_style_source] Live OpenAI call failed: {e}", file=sys.stderr)
-        # Re-raise so Cloud Run returns 500 instead of silently showing demo data
+        # Re-raise so Cloud Run returns 500 instead of silently hiding issues
         raise
