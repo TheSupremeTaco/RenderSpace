@@ -56,9 +56,6 @@ Given a style query like "postmodern bedroom furniture" or "Japandi living room"
   - target.com
   - homedepot.com
   - lowes.com
-  - article.com
-  - westelm.com
-  - cb2.com
   - crateandbarrel.com
   - potterybarn.com
 - NEVER use wayfair.com. If a candidate product is on wayfair.com, skip it.
