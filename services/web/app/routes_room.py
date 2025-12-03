@@ -1,7 +1,6 @@
-from flask import Blueprint, request, jsonify
-from .llm_client import call_style_source   # note the leading dot
+from flask import Blueprint, request, jsonify, current_app
+from .llm_client import call_style_source
 import uuid
-
 
 bp_room = Blueprint("room", __name__)
 
@@ -22,12 +21,18 @@ def room_setup():
     try:
         style_data = call_style_source(style_query, max_items=5)
     except Exception as e:
-        # Log full traceback to Cloud Run logs
+        # full traceback to Cloud Run logs
         current_app.logger.exception("call_style_source failed")
-        # Return readable error to the browser for now
-        return jsonify(
-            {"error": "style_source_failed", "detail": str(e)}
-        ), 500
+        # send a useful error back to the browser
+        return (
+            jsonify(
+                {
+                    "error": "style_source_failed",
+                    "detail": str(e),
+                }
+            ),
+            500,
+        )
 
     products = style_data.get("products", [])
 
