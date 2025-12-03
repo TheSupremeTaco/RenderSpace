@@ -7,8 +7,8 @@ from .routes_room import bp_room
 def create_app():
     app = Flask(
         __name__,
-        static_folder="static",
-        template_folder="templates",
+        static_folder="static",      # points to services/web/app/static
+        template_folder="templates", # if you use templates anywhere
     )
 
     # Register blueprints
@@ -18,5 +18,5 @@ def create_app():
     return app
 
 
-# For environments that expect `app` at module level (gunicorn, etc.)
+# Cloud Run / gunicorn expects `app` at package level
 app = create_app()

@@ -1,7 +1,7 @@
-# routes_room.py
 from flask import Blueprint, request, jsonify
-from .llm_client import call_style_source   # <-- NOTE THE DOT
+from .llm_client import call_style_source   # note the leading dot
 import uuid
+
 
 bp_room = Blueprint("room", __name__)
 
