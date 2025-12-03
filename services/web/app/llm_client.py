@@ -1,40 +1,46 @@
-# services/web/app/llm_client.py
 import json
-import random
+import os
 import sys
+
 from openai import OpenAI
 
-client = OpenAI()
 
+def _get_client() -> OpenAI:
+    """
+    Strict client init: if anything is wrong, raise instead of
+    silently returning stub data.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set in the environment")
 
-def _stub_products(style_query: str, max_items: int):
-    """Fallback if OpenAI/web_search fails."""
-    products = []
-    for i in range(max_items):
-        products.append(
-            {
-                "title": f"Demo item {i + 1} for {style_query}",
-                "retailer": "demo",
-                "product_url": "https://example.com",
-                "image_url": f"https://via.placeholder.com/300x200?text=Item+{i+1}",
-                "price": round(random.uniform(50, 500), 2),
-                "category": "other",
-                "tags": [style_query],
-            }
-        )
-    return {"style": style_query, "products": products}
+    return OpenAI(api_key=api_key)
 
 
 def call_style_source(style_query: str, max_items: int = 5):
     """
-    Use an LLM with web_search enabled to fetch furniture from Wayfair/Amazon.
+    Use an LLM with web_search enabled to fetch furniture from
+    Wayfair/Amazon.
 
-    Returns:
+    Returns JSON like:
       {
         "style": "<normalized_style>",
-        "products": [ { ... }, ... ]
+        "products": [
+          {
+            "title": "...",
+            "retailer": "wayfair" | "amazon",
+            "product_url": "...",
+            "image_url": "...",
+            "price": 123.45 or null,
+            "category": "...",
+            "tags": ["tag1","tag2"]
+          },
+          ...
+        ]
       }
     """
+    client = _get_client()
+
     system_msg = """
 You are a furniture style and sourcing agent for a 3D interior design tool (RenderSpace).
 
@@ -77,7 +83,7 @@ Do not add any explanation text outside the JSON.
 
     try:
         resp = client.responses.create(
-            model="gpt-4.1-mini",  # adjust to a model you have access to
+            model="gpt-4.1-mini",  # or another Responses API model with web_search
             input=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
@@ -85,12 +91,14 @@ Do not add any explanation text outside the JSON.
             tools=[{"type": "web_search"}],
         )
 
-        # Adjust this if your SDK version differs
+        # Depending on SDK version, adjust this access pattern if needed
         text = resp.output[0].content[0].text
+
         data = json.loads(text)
         return data
+
     except Exception as e:
-        # Log the error so you can see it in the server logs
-        print(f"[call_style_source] Error calling OpenAI: {e}", file=sys.stderr, flush=True)
-        # Fallback to stub so the API still returns 200
-        return _stub_products(style_query, max_items)
+        # Log clearly so you see why live data failed
+        print(f"[call_style_source] Live OpenAI call failed: {e}", file=sys.stderr)
+        # Re-raise so Cloud Run returns 500 instead of silently showing demo data
+        raise
