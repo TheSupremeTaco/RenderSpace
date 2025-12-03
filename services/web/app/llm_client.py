@@ -53,9 +53,19 @@ Given a style query like "postmodern bedroom furniture" or "Japandi living room"
 - Return up to N furniture pieces that match the query.
 - Focus on core room furniture (beds, sofas, tables, nightstands, chairs, consoles, rugs).
 
+IMAGE REQUIREMENTS (very important):
+- The image_url MUST be a REAL product photo that visibly shows the furniture item.
+- Do NOT use any generic or placeholder image such as ones that display text like
+  "No Image Available" or a camera icon.
+- If the HTML for an image has alt text like "No Image Available", "placeholder"
+  or similar, skip that image and that product.
+- Prefer Amazon results when possible because their main product images are stable.
+- Only include Wayfair products if you can find a real product photo in the gallery.
+- If you cannot find a proper image for a product, SKIP that product and pick another one.
+
 For each product you must:
 - Extract the product page URL (product_url).
-- Extract the main product image URL (image_url) — the first clear product image.
+- Extract the main product image URL (image_url) — a REAL image of the furniture.
 - Estimate price in USD if possible, otherwise use null.
 - Assign a category from:
   ["bed","sofa","coffee_table","nightstand","chair","media_console","rug","other"].
