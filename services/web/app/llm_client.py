@@ -51,13 +51,6 @@ Given a style query like "postmodern bedroom furniture" or "Japandi living room"
 - Use web search.
 - Restrict results to the following domains ONLY:
   - amazon.com
-  - ikea.com
-  - walmart.com
-  - target.com
-  - homedepot.com
-  - lowes.com
-  - crateandbarrel.com
-  - potterybarn.com
 - NEVER use wayfair.com. If a candidate product is on wayfair.com, skip it.
 
 IMAGE REQUIREMENTS (very important):
